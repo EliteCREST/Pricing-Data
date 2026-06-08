@@ -159,10 +159,14 @@
 /* Paste your Apps Script Web App /exec URL here after deploying Code.gs */
 var API_URL = "https://script.google.com/macros/s/AKfycbz-YW3LCkymxrQ-JePTI_skHyPVfBpSknn3SEW2MqD_1JN0YOeYHipVXWNoN-fx0nO2/exec";
 
-/* Which columns get dropdown filters (must match Raw Data headers) */
-var FILTER_COLS = ["ST","State Id","SUPPLIER","Type","Brand","Type Code","Trade Type","Price Sheet"];
+/* Plain filters: value taken directly from this Raw Data column */
+var FILTER_COLS = ["ST","SUPPLIER","Type","Brand","Trade Type","Price Sheet"];
 /* Friendlier labels for the dropdowns */
-var FILTER_LABELS = {"ST":"State","State Id":"Region","SUPPLIER":"Supplier","Type Code":"Type Code"};
+var FILTER_LABELS = {"ST":"State","SUPPLIER":"Supplier"};
+/* Special filters whose options come from the Search Filters tab and map back to Raw Data.
+   sfCol = column index on Search Filters tab (0-based): A=0 State, B=1 Region, C=2 Supplier,
+           D=3 Supplier Location, E=4 How it is listed in Blaze */
+var SF = { STATE:0, REGION:1, SUPPLIER:2, LOCATION:3, BLAZE:4 };
 /* Columns rendered right-aligned / styled */
 var NUM_COLS = ["Current Price"];
 var ID_COLS = ["Parent Id","Child Id","Product Id","Unique ID","Supplier Id","State Id"];
@@ -172,7 +176,9 @@ var PRICE_COLS = ["Current Price"];
 var DATA = { raw:{headers:[],rows:[]}, filters:{headers:[],rows:[]} };
 var view = "raw";
 var sortCol = -1, sortDir = 1;
-var filterState = {};          // colName -> selected value
+var filterState = {};          // plain colName -> selected value
+var specialFilter = {};        // 'region' | 'location' -> selected value
+var locLookup = {};            // "STATE||SUPPLIER" -> Supplier Location
 var searchTerm = "";
 var filtered = [];             // current filtered+sorted rows (array of arrays)
 var RENDER_CHUNK = 200, rendered = 0;
@@ -199,6 +205,7 @@ function load(){
   jsonp("bootstrap", function(res){
     if(!res || !res.ok){ showError((res&&res.error)||"Failed to load data."); hideLoading(); return; }
     DATA.raw = res.raw; DATA.filters = res.filters;
+    buildLocLookup();
     var u = res.meta && res.meta.lastUpdated ? new Date(res.meta.lastUpdated) : null;
     document.getElementById("updatedAt").textContent = u ? "Updated "+u.toLocaleString() : "";
     buildFilterBar();
@@ -222,12 +229,36 @@ function switchTab(t){
   render();
 }
 
+/* ============ SEARCH-FILTERS LOOKUPS ============ */
+function buildLocLookup(){
+  locLookup = {};
+  var rows = DATA.filters.rows || [];
+  rows.forEach(function(r){
+    var state=(r[SF.STATE]||"").trim();
+    var sup=(r[SF.SUPPLIER]||"").trim();
+    var loc=(r[SF.BLAZE]||"").trim();   // column E = "How it is listed in Blaze"
+    if(state && sup && loc) locLookup[(state+"||"+sup).toUpperCase()] = loc;
+  });
+}
+function rowLocation(rawRow, h){
+  var st=(rawRow[colIndex(h,"ST")]||"").trim();
+  var sup=(rawRow[colIndex(h,"SUPPLIER")]||"").trim();
+  return locLookup[(st+"||"+sup).toUpperCase()] || "";
+}
+
 /* ============ FILTER BAR ============ */
 function colIndex(headers,name){ return headers.indexOf(name); }
 function buildFilterBar(){
   var bar = document.getElementById("filterBar");
   bar.innerHTML="";
   var h = DATA.raw.headers;
+
+  // Region dropdown — options from Search Filters col B, filters Raw Data on State Id
+  addSpecialSelect(bar, "region", "Region", uniqueSF(SF.REGION));
+  // Supplier Location dropdown — options from Search Filters col E
+  addSpecialSelect(bar, "location", "Supplier Location", uniqueSF(SF.BLAZE));
+
+  // Plain Raw Data column filters
   FILTER_COLS.forEach(function(col){
     var idx = colIndex(h,col); if(idx<0) return;
     var vals = {};
@@ -235,12 +266,26 @@ function buildFilterBar(){
     var options = Object.keys(vals).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
     var wrap=document.createElement("div"); wrap.className="fsel";
     var lab=document.createElement("label"); lab.textContent=FILTER_LABELS[col]||col;
-    var sel=document.createElement("select");
+    var sel=document.createElement("select"); sel.dataset.col=col;
     sel.innerHTML='<option value="">All</option>'+options.map(function(o){
         return '<option value="'+escAttr(o)+'">'+escHtml(o)+'</option>';}).join("");
     sel.onchange=function(){ if(sel.value) filterState[col]=sel.value; else delete filterState[col]; render(); };
     wrap.appendChild(lab); wrap.appendChild(sel); bar.appendChild(wrap);
   });
+}
+function uniqueSF(ci){
+  var vals={};
+  (DATA.filters.rows||[]).forEach(function(r){ var v=(r[ci]||"").trim(); if(v) vals[v]=1; });
+  return Object.keys(vals).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+}
+function addSpecialSelect(bar, key, label, options){
+  var wrap=document.createElement("div"); wrap.className="fsel";
+  var lab=document.createElement("label"); lab.textContent=label;
+  var sel=document.createElement("select"); sel.dataset.special=key;
+  sel.innerHTML='<option value="">All</option>'+options.map(function(o){
+      return '<option value="'+escAttr(o)+'">'+escHtml(o)+'</option>';}).join("");
+  sel.onchange=function(){ if(sel.value) specialFilter[key]=sel.value; else delete specialFilter[key]; render(); };
+  wrap.appendChild(lab); wrap.appendChild(sel); bar.appendChild(wrap);
 }
 
 /* ============ RENDER ============ */
@@ -252,8 +297,15 @@ function applyFilters(){
   var activeFilters = (view==="raw") ? Object.keys(filterState) : [];
   var fIdx = activeFilters.map(function(c){return {i:colIndex(h,c),v:filterState[c]};});
 
+  // special filters only apply to the Raw Data view
+  var regionVal = (view==="raw") ? specialFilter.region : null;
+  var locVal    = (view==="raw") ? specialFilter.location : null;
+  var stateIdIdx = colIndex(h,"State Id");
+
   filtered = rows.filter(function(r){
     for(var k=0;k<fIdx.length;k++){ if((r[fIdx[k].i]||"").trim()!==fIdx[k].v) return false; }
+    if(regionVal && (r[stateIdIdx]||"").trim()!==regionVal) return false;
+    if(locVal && rowLocation(r,h)!==locVal) return false;
     if(term){
       var hit=false;
       for(var j=0;j<r.length;j++){ if((r[j]||"").toLowerCase().indexOf(term)>-1){hit=true;break;} }
@@ -337,6 +389,13 @@ document.getElementById("gridWrap").addEventListener("scroll",function(e){
 function buildChips(){
   var bar=document.getElementById("chipBar"); bar.innerHTML="";
   if(view!=="raw") return;
+  var specialLabels={region:"Region",location:"Supplier Location"};
+  Object.keys(specialFilter).forEach(function(key){
+    var c=document.createElement("div"); c.className="chip";
+    c.innerHTML='<b>'+escHtml(specialLabels[key])+':</b> '+escHtml(specialFilter[key])+' <span>×</span>';
+    c.querySelector("span").onclick=function(){ delete specialFilter[key]; syncSelects(); render(); };
+    bar.appendChild(c);
+  });
   Object.keys(filterState).forEach(function(col){
     var c=document.createElement("div"); c.className="chip";
     c.innerHTML='<b>'+escHtml(FILTER_LABELS[col]||col)+':</b> '+escHtml(filterState[col])+' <span>×</span>';
@@ -351,9 +410,9 @@ function buildChips(){
   }
 }
 function syncSelects(){
-  document.querySelectorAll("#filterBar select").forEach(function(sel,i){
-    var col=FILTER_COLS.filter(function(c){return colIndex(DATA.raw.headers,c)>-1;})[i];
-    if(col) sel.value=filterState[col]||"";
+  document.querySelectorAll("#filterBar select").forEach(function(sel){
+    if(sel.dataset.special) sel.value = specialFilter[sel.dataset.special]||"";
+    else if(sel.dataset.col) sel.value = filterState[sel.dataset.col]||"";
   });
 }
 
@@ -381,7 +440,7 @@ function closeDrawer(){
 
 /* ============ ACTIONS ============ */
 function clearAll(){
-  filterState={}; searchTerm=""; document.getElementById("searchBox").value="";
+  filterState={}; specialFilter={}; searchTerm=""; document.getElementById("searchBox").value="";
   document.querySelectorAll("#filterBar select").forEach(function(s){s.value="";});
   sortCol=-1; render();
 }
