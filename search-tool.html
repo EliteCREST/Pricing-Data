@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Search Tool</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #181c27;
+    --surface2: #1f2436;
+    --border: #2a3050;
+    --border-light: #353d5e;
+    --accent: #4f8ef7;
+    --accent-dim: rgba(79,142,247,0.12);
+    --accent-glow: rgba(79,142,247,0.25);
+    --text: #e8ecf5;
+    --text-muted: #7a85a3;
+    --text-dim: #4a5270;
+    --success: #3ecf8e;
+    --warning: #f5a623;
+    --danger: #f74f4f;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+
+  /* HEADER */
+  .header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 0 24px; height: 60px; display: flex; align-items: center;
+    justify-content: space-between; position: sticky; top: 0; z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo-icon {
+    width: 32px; height: 32px; background: var(--accent); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; color: white; font-size: 14px;
+  }
+  .app-title { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+  .status-pill {
+    display: flex; align-items: center; gap: 6px; padding: 4px 10px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 20px; font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text-muted);
+  }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); transition: all 0.3s; flex-shrink: 0; }
+  .status-dot.connected { background: var(--success); box-shadow: 0 0 6px var(--success); }
+  .status-dot.loading { background: var(--warning); animation: pulse 1s infinite; }
+  .status-dot.error { background: var(--danger); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .header-right { display: flex; align-items: center; gap: 8px; }
+  .icon-btn {
+    width: 36px; height: 36px; border: 1px solid var(--border); background: var(--surface2);
+    border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center;
+    justify-content: center; color: var(--text-muted); transition: all 0.2s;
+  }
+  .icon-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+  .icon-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+  .icon-btn svg { width: 16px; height: 16px; }
+  .icon-btn.spin-active svg { animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* SETTINGS PANEL */
+  .settings-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+  .settings-overlay.open { opacity: 1; pointer-events: all; }
+  .settings-panel {
+    position: fixed; top: 0; right: -440px; width: 440px; height: 100vh;
+    background: var(--surface); border-left: 1px solid var(--border);
+    z-index: 201; transition: right 0.3s cubic-bezier(0.4,0,0.2,1);
+    display: flex; flex-direction: column; box-shadow: -8px 0 40px rgba(0,0,0,0.5);
+  }
+  .settings-panel.open { right: 0; }
+  .settings-header {
+    padding: 18px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .settings-title { font-size: 14px; font-weight: 600; }
+  .settings-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+  .s-label { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 10px; }
+  .field-group { display: flex; flex-direction: column; gap: 5px; }
+  .field-label { font-size: 12px; color: var(--text-muted); }
+  .field-input {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text); font-family: 'DM Mono', monospace; font-size: 11px;
+    padding: 9px 11px; width: 100%; outline: none; transition: border-color 0.2s;
+  }
+  .field-input:focus { border-color: var(--accent); }
+  .field-input::placeholder { color: var(--text-dim); }
+  .btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.2s; }
+  .btn svg { width: 13px; height: 13px; }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: #6fa0f9; }
+  .btn-ghost { background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+  .btn-danger { background: transparent; border: 1px solid rgba(247,79,79,0.3); color: var(--danger); }
+  .btn-danger:hover { background: rgba(247,79,79,0.08); }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .conn-info { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; font-size: 12px; font-family: 'DM Mono', monospace; display: flex; flex-direction: column; gap: 7px; }
+  .ci-row { display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); }
+  .ci-val { color: var(--text); font-weight: 500; }
+  .ci-val.ok { color: var(--success); }
+  .ci-val.err { color: var(--danger); }
+  .divider { height: 1px; background: var(--border); }
+  .auto-row { display: flex; align-items: center; gap: 10px; }
+  .toggle { width: 36px; height: 20px; background: var(--border); border-radius: 10px; cursor: pointer; position: relative; transition: background 0.2s; flex-shrink: 0; border: none; }
+  .toggle::after { content: ''; position: absolute; width: 14px; height: 14px; background: white; border-radius: 50%; top: 3px; left: 3px; transition: left 0.2s; }
+  .toggle.on { background: var(--accent); }
+  .toggle.on::after { left: 19px; }
+  .toggle-label { font-size: 13px; color: var(--text-muted); }
+
+  /* MAIN */
+  .main { max-width: 1600px; margin: 0 auto; padding: 20px 24px; }
+
+  /* SEARCH */
+  .search-wrap { position: relative; margin-bottom: 14px; }
+  .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-dim); pointer-events: none; }
+  .search-icon svg { width: 17px; height: 17px; }
+  .search-input {
+    width: 100%; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text); font-family: 'DM Sans', sans-serif;
+    font-size: 15px; padding: 13px 44px 13px 42px; outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+  .search-input::placeholder { color: var(--text-dim); }
+  .clear-btn { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 4px; border-radius: 4px; display: none; align-items: center; transition: color 0.2s; }
+  .clear-btn:hover { color: var(--text); }
+  .clear-btn svg { width: 14px; height: 14px; }
+  .clear-btn.vis { display: flex; }
+
+  /* FILTERS ROW */
+  .filters-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  .filter-select {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 12px;
+    padding: 7px 28px 7px 10px; cursor: pointer; outline: none; appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237a85a3' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 9px center;
+    min-width: 130px; max-width: 200px; transition: border-color 0.2s;
+  }
+  .filter-select:hover, .filter-select:focus { border-color: var(--accent); }
+  .filter-select option { background: #1f2436; }
+  .filter-select.active { border-color: var(--accent); background-color: var(--accent-dim); color: var(--accent); }
+  .spacer { flex: 1; min-width: 8px; }
+  .results-count { font-size: 11px; color: var(--text-muted); font-family: 'DM Mono', monospace; white-space: nowrap; }
+  .results-count b { color: var(--text); }
+  .clear-filters { background: none; border: none; color: var(--text-dim); font-size: 12px; font-family: 'DM Sans', sans-serif; cursor: pointer; padding: 6px 8px; border-radius: var(--radius-sm); transition: color 0.2s; }
+  .clear-filters:hover { color: var(--accent); }
+  .export-btn { display: flex; align-items: center; gap: 5px; padding: 7px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 12px; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+  .export-btn:hover { border-color: var(--success); color: var(--success); background: rgba(62,207,142,0.08); }
+  .export-btn svg { width: 13px; height: 13px; }
+
+  /* TABLE */
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .table-scroll { overflow-x: auto; max-height: calc(100vh - 220px); overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead { background: var(--surface2); position: sticky; top: 0; z-index: 10; }
+  thead tr { border-bottom: 1px solid var(--border); }
+  th { padding: 10px 14px; text-align: left; font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-dim); white-space: nowrap; cursor: pointer; user-select: none; transition: color 0.2s; }
+  th:hover { color: var(--text-muted); }
+  th.asc, th.desc { color: var(--accent); }
+  th .si { margin-left: 3px; font-size: 10px; }
+  th.asc .si::after { content: '↑'; }
+  th.desc .si::after { content: '↓'; }
+  tbody tr { border-bottom: 1px solid rgba(42,48,80,0.6); transition: background 0.1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: rgba(79,142,247,0.05); }
+  td { padding: 9px 14px; color: var(--text); vertical-align: middle; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  td.num { font-family: 'DM Mono', monospace; color: var(--text-muted); }
+  .hl { background: rgba(79,142,247,0.22); color: var(--accent); border-radius: 2px; padding: 0 1px; }
+
+  /* STATES */
+  .empty-state, .loading-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 24px; gap: 12px; }
+  .state-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--surface2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--text-dim); }
+  .state-icon svg { width: 20px; height: 20px; }
+  .state-icon.err { border-color: rgba(247,79,79,0.3); color: var(--danger); }
+  .state-title { font-size: 14px; font-weight: 500; color: var(--text-muted); }
+  .state-title.err { color: var(--danger); }
+  .state-sub { font-size: 12px; color: var(--text-dim); text-align: center; max-width: 360px; line-height: 1.6; }
+  .spinner { width: 26px; height: 26px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+
+  /* NOTIF */
+  .notif { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(60px); background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 18px; font-size: 13px; color: var(--text); display: flex; align-items: center; gap: 9px; z-index: 300; transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); box-shadow: var(--shadow); white-space: nowrap; }
+  .notif.show { transform: translateX(-50%) translateY(0); }
+  .notif.success { border-color: var(--success); }
+  .notif.error { border-color: var(--danger); }
+  .nd { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; }
+  .notif.success .nd { background: var(--success); }
+  .notif.error .nd { background: var(--danger); }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+  @media(max-width:768px) { .settings-panel{width:100%;right:-100%;} .main{padding:12px;} }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+    </div>
+    <span class="app-title">Search Tool</span>
+    <div class="status-pill">
+      <div class="status-dot" id="sDot"></div>
+      <span id="sTxt">not connected</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <button class="icon-btn" id="refreshBtn" title="Refresh data">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    </button>
+    <button class="icon-btn" id="settingsBtn" title="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="settings-overlay" id="sOverlay"></div>
+<div class="settings-panel" id="sPanel">
+  <div class="settings-header">
+    <span class="settings-title">Settings</span>
+    <button class="icon-btn" id="sClose">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="settings-body">
+    <div>
+      <div class="s-label">Data Source</div>
+      <div class="field-group">
+        <label class="field-label">Google Apps Script URL</label>
+        <input class="field-input" id="urlInput" type="url" placeholder="https://script.google.com/macros/s/..."/>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="connectBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        Connect &amp; Pull
+      </button>
+      <button class="btn btn-ghost" id="sPullBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Refresh
+      </button>
+    </div>
+    <div class="divider"></div>
+    <div>
+      <div class="s-label">Connection Status</div>
+      <div class="conn-info">
+        <div class="ci-row"><span>Status</span><span class="ci-val" id="ciStatus">—</span></div>
+        <div class="ci-row"><span>Last synced</span><span class="ci-val" id="ciSync">—</span></div>
+        <div class="ci-row"><span>Total rows</span><span class="ci-val" id="ciRows">—</span></div>
+        <div class="ci-row"><span>Columns</span><span class="ci-val" id="ciCols">—</span></div>
+        <div class="ci-row"><span>Filter dropdowns</span><span class="ci-val" id="ciFilt">—</span></div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div>
+      <div class="s-label">Auto Refresh</div>
+      <div class="auto-row">
+        <button class="toggle" id="autoToggle"></button>
+        <span class="toggle-label">Enable auto refresh</span>
+      </div>
+      <div class="field-group" style="margin-top:10px">
+        <label class="field-label">Interval (minutes)</label>
+        <input class="field-input" id="autoMin" type="number" min="1" max="60" value="5"/>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div>
+      <div class="s-label">Data</div>
+      <div class="btn-row">
+        <button class="btn btn-danger" id="clearBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+          Clear cached data
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<main class="main">
+  <div class="search-wrap">
+    <span class="search-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+    <input class="search-input" id="searchInput" placeholder="Search all fields…" autocomplete="off"/>
+    <button class="clear-btn" id="clearSearch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="filters-row" id="filtersRow">
+    <div class="spacer"></div>
+    <button class="clear-filters" id="clearFilters" style="display:none">✕ Clear filters</button>
+    <button class="export-btn" id="exportBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export CSV
+    </button>
+    <span class="results-count" id="rCount"></span>
+  </div>
+  <div class="table-wrap">
+    <div class="table-scroll" id="tableWrap">
+      <div class="empty-state">
+        <div class="state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+        <div class="state-title">No data loaded</div>
+        <div class="state-sub">Open settings ⚙ and connect your Google Apps Script URL to get started.</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="notif" id="notif"><div class="nd"></div><span id="notifMsg"></span></div>
+
+<script>
+var S = {
+  url: localStorage.getItem('st_url') || '',
+  data: [], headers: [], filterCols: [],
+  sortCol: null, sortDir: 'asc',
+  autoOn: false, autoTimer: null, lastSync: null
+};
+
+var NUM_COLS = ['Current Price','Price UOM','Product Id','Parent Id','Child Id','Unique ID','Supplier Id','State Id'];
+
+function g(id){ return document.getElementById(id); }
+
+// Init
+(function(){
+  if(S.url){ g('urlInput').value = S.url; }
+  var cached = localStorage.getItem('st_data');
+  if(cached){
+    try{
+      var p = JSON.parse(cached);
+      applyData(p.data, p.headers, p.filterCols, true);
+    }catch(e){}
+  }
+})();
+
+// Settings panel
+g('settingsBtn').addEventListener('click', function(){
+  g('sPanel').classList.add('open');
+  g('sOverlay').classList.add('open');
+  g('settingsBtn').classList.add('active');
+});
+function closePanel(){
+  g('sPanel').classList.remove('open');
+  g('sOverlay').classList.remove('open');
+  g('settingsBtn').classList.remove('active');
+}
+g('sClose').addEventListener('click', closePanel);
+g('sOverlay').addEventListener('click', closePanel);
+
+// Connect
+g('connectBtn').addEventListener('click', function(){
+  var url = g('urlInput').value.trim();
+  if(!url){ notify('Enter a script URL','error'); return; }
+  S.url = url;
+  localStorage.setItem('st_url', url);
+  fetchData(url);
+});
+g('sPullBtn').addEventListener('click', function(){ if(S.url) fetchData(S.url); else notify('No URL set','error'); });
+g('refreshBtn').addEventListener('click', function(){
+  if(!S.url){ notify('Open Settings and connect first','error'); return; }
+  fetchData(S.url);
+});
+
+function fetchData(url){
+  setStatus('loading','fetching…');
+  g('refreshBtn').classList.add('spin-active');
+  showLoading();
+  fetch(url)
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(json){
+      var rows=[], headers=[], filterCols=[];
+      if(json.data && Array.isArray(json.data)){
+        rows = json.data;
+        headers = json.headers || (rows.length ? Object.keys(rows[0]) : []);
+        filterCols = json.filterColumns || headers;
+      } else if(Array.isArray(json)){
+        rows = json;
+        headers = rows.length ? Object.keys(rows[0]) : [];
+        filterCols = headers;
+      }
+      S.lastSync = new Date();
+      localStorage.setItem('st_data', JSON.stringify({data:rows, headers:headers, filterCols:filterCols}));
+      applyData(rows, headers, filterCols, false);
+      setStatus('connected', rows.length+' rows');
+      updateCI(rows.length, headers.length, filterCols);
+      notify('Loaded '+rows.length+' rows','success');
+    })
+    .catch(function(err){
+      setStatus('error','error');
+      showError(err.message);
+      notify('Failed: '+err.message,'error');
+    })
+    .finally(function(){
+      g('refreshBtn').classList.remove('spin-active');
+    });
+}
+
+function applyData(rows, headers, filterCols, fromCache){
+  S.data = rows; S.headers = headers; S.filterCols = filterCols;
+  buildFilters(filterCols, rows);
+  renderTable();
+  if(fromCache){
+    setStatus('connected', rows.length+' rows (cached)');
+    updateCI(rows.length, headers.length, filterCols);
+  }
+}
+
+// Filters
+function buildFilters(cols, rows){
+  var row = g('filtersRow');
+  row.querySelectorAll('.filter-select').forEach(function(s){ s.remove(); });
+  var spacer = row.querySelector('.spacer');
+  cols.forEach(function(col){
+    var vals = [];
+    var seen = {};
+    for(var i=0;i<rows.length;i++){
+      var v = String(rows[i][col]||'').trim();
+      if(v && !seen[v]){ seen[v]=1; vals.push(v); }
+    }
+    if(!vals.length) return;
+    vals.sort(function(a,b){ return a.localeCompare(b,undefined,{numeric:true}); });
+    var sel = document.createElement('select');
+    sel.className = 'filter-select';
+    sel.dataset.col = col;
+    sel.innerHTML = '<option value="">'+col+'</option>' +
+      vals.map(function(v){ return '<option value="'+esc(v)+'">'+esc(v)+'</option>'; }).join('');
+    sel.addEventListener('change', function(){
+      sel.classList.toggle('active', sel.value!=='');
+      updateClearBtn(); renderTable();
+    });
+    row.insertBefore(sel, spacer);
+  });
+  updateClearBtn();
+}
+
+function getFilters(){
+  var f={};
+  g('filtersRow').querySelectorAll('.filter-select').forEach(function(s){
+    if(s.value) f[s.dataset.col]=s.value.toLowerCase();
+  });
+  return f;
+}
+
+g('clearFilters').addEventListener('click', function(){
+  g('filtersRow').querySelectorAll('.filter-select').forEach(function(s){ s.value=''; s.classList.remove('active'); });
+  updateClearBtn(); renderTable();
+});
+
+function updateClearBtn(){
+  var any = Array.from(g('filtersRow').querySelectorAll('.filter-select')).some(function(s){ return s.value!==''; });
+  g('clearFilters').style.display = any?'':'none';
+}
+
+// Search
+g('searchInput').addEventListener('input', function(){
+  g('clearSearch').classList.toggle('vis', this.value!=='');
+  renderTable();
+});
+g('clearSearch').addEventListener('click', function(){
+  g('searchInput').value=''; this.classList.remove('vis'); renderTable();
+});
+
+// Sort
+function doSort(col){
+  if(S.sortCol===col) S.sortDir = S.sortDir==='asc'?'desc':'asc';
+  else { S.sortCol=col; S.sortDir='asc'; }
+  renderTable();
+}
+
+// Render
+function renderTable(){
+  if(!S.data.length) return;
+  var q = g('searchInput').value.trim().toLowerCase();
+  var filters = getFilters();
+  var rows = S.data.filter(function(row){
+    for(var col in filters){
+      if(String(row[col]||'').toLowerCase() !== filters[col]) return false;
+    }
+    if(q){
+      return Object.values(row).some(function(v){ return String(v||'').toLowerCase().includes(q); });
+    }
+    return true;
+  });
+
+  if(S.sortCol){
+    var sc=S.sortCol, sd=S.sortDir;
+    rows = rows.slice().sort(function(a,b){
+      var av=String(a[sc]||'').toLowerCase(), bv=String(b[sc]||'').toLowerCase();
+      var c=av.localeCompare(bv,undefined,{numeric:true});
+      return sd==='asc'?c:-c;
+    });
+  }
+
+  g('rCount').innerHTML = '<b>'+rows.length+'</b> of <b>'+S.data.length+'</b>';
+  window._filteredRows = rows;
+
+  if(!rows.length){
+    g('tableWrap').innerHTML = '<div class="empty-state"><div class="state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><div class="state-title">No results</div><div class="state-sub">Try adjusting your search or filters.</div></div>';
+    return;
+  }
+
+  var hdrs = S.headers;
+  var thead = '<thead><tr>'+hdrs.map(function(h){
+    var cls='';
+    if(S.sortCol===h) cls=S.sortDir==='asc'?'asc':'desc';
+    return '<th class="'+cls+'" data-col="'+esc(h)+'">'+esc(h)+'<span class="si"></span></th>';
+  }).join('')+'</tr></thead>';
+
+  var tbody = '<tbody>'+rows.map(function(row){
+    return '<tr>'+hdrs.map(function(h){
+      var raw = String(row[h]||'');
+      var cell = esc(raw);
+      if(q && raw.toLowerCase().includes(q)){
+        cell = raw.replace(new RegExp('('+escRe(q)+')','gi'),'<span class="hl">$1</span>');
+      }
+      var isNum = NUM_COLS.indexOf(h)!==-1;
+      return '<td class="'+(isNum?'num':'')+'" title="'+esc(raw)+'">'+cell+'</td>';
+    }).join('')+'</tr>';
+  }).join('')+'</tbody>';
+
+  g('tableWrap').innerHTML = '<table>'+thead+tbody+'</table>';
+  g('tableWrap').querySelectorAll('th').forEach(function(th){
+    th.addEventListener('click', function(){ doSort(th.dataset.col); });
+  });
+}
+
+// Export
+g('exportBtn').addEventListener('click', function(){
+  var rows = window._filteredRows || S.data;
+  if(!rows.length){ notify('No data to export','error'); return; }
+  var hdrs = S.headers;
+  var csv = [hdrs.map(csvE).join(',')].concat(rows.map(function(r){
+    return hdrs.map(function(h){ return csvE(String(r[h]||'')); }).join(',');
+  })).join('\r\n');
+  var b = new Blob([csv],{type:'text/csv'});
+  var u = URL.createObjectURL(b);
+  var a = document.createElement('a'); a.href=u; a.download='export-'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
+  URL.revokeObjectURL(u);
+  notify('CSV exported','success');
+});
+
+// Auto refresh
+g('autoToggle').addEventListener('click', function(){
+  S.autoOn=!S.autoOn;
+  this.classList.toggle('on',S.autoOn);
+  S.autoOn ? startAuto() : stopAuto();
+});
+function startAuto(){
+  stopAuto();
+  var m=Math.max(1,parseInt(g('autoMin').value)||5);
+  S.autoTimer=setInterval(function(){ if(S.url) fetchData(S.url); }, m*60000);
+}
+function stopAuto(){ if(S.autoTimer){ clearInterval(S.autoTimer); S.autoTimer=null; } }
+
+// Clear
+g('clearBtn').addEventListener('click', function(){
+  localStorage.removeItem('st_data');
+  S.data=[]; S.headers=[]; S.filterCols=[];
+  g('tableWrap').innerHTML='<div class="empty-state"><div class="state-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div class="state-title">No data loaded</div><div class="state-sub">Open settings ⚙ and connect your Google Apps Script URL.</div></div>';
+  g('filtersRow').querySelectorAll('.filter-select').forEach(function(s){ s.remove(); });
+  g('rCount').innerHTML='';
+  setStatus('','not connected');
+  updateCI(0,0,[]);
+  notify('Data cleared','success');
+});
+
+// Status
+function setStatus(type, txt){
+  g('sDot').className='status-dot'+(type?' '+type:'');
+  g('sTxt').textContent=txt;
+}
+function updateCI(rows,cols,filt){
+  g('ciStatus').textContent = rows>0?'Connected':'—';
+  g('ciStatus').className = 'ci-val'+(rows>0?' ok':'');
+  g('ciSync').textContent = S.lastSync?S.lastSync.toLocaleTimeString():'—';
+  g('ciRows').textContent = rows||'—';
+  g('ciCols').textContent = cols||'—';
+  g('ciFilt').textContent = filt.length?filt.length+' columns':'—';
+}
+
+// Loading/error
+function showLoading(){
+  g('tableWrap').innerHTML='<div class="loading-state"><div class="spinner"></div><span style="font-size:12px;color:var(--text-muted)">Fetching data…</span></div>';
+}
+function showError(msg){
+  g('tableWrap').innerHTML='<div class="empty-state"><div class="state-icon err"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="state-title err">Connection failed</div><div class="state-sub">'+esc(msg)+'<br><br>Make sure the script is deployed as a web app with access set to <b>Anyone</b>.</div></div>';
+}
+
+// Notify
+var nTimer;
+function notify(msg,type){
+  var el=g('notif'); el.className='notif'+(type?' '+type:'');
+  g('notifMsg').textContent=msg; el.classList.add('show');
+  clearTimeout(nTimer); nTimer=setTimeout(function(){ el.classList.remove('show'); },3000);
+}
+
+// Helpers
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escRe(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+function csvE(v){ if(v.includes(',')||v.includes('"')||v.includes('\n')) return '"'+v.replace(/"/g,'""')+'"'; return v; }
+</script>
+</body>
+</html>
