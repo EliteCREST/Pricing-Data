@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Elite Pricing Viewer</title>
+<style>
+  :root{
+    --navy:#1B2A4A; --blue:#1F5FAD; --gold:#C9A961;
+    --ink:#1c2533; --muted:#64748b; --line:#e2e8f0; --bg:#f1f4f9;
+    --row-alt:#f7f9fc; --hover:#eef4fc; --white:#fff;
+    --chip:#eaf1fb; --shadow:0 1px 3px rgba(16,31,54,.08),0 6px 18px rgba(16,31,54,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:Arial,Helvetica,sans-serif;color:var(--ink);background:var(--bg);
+       display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+  /* Header */
+  header{background:var(--navy);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:16px;flex:none}
+  header .brand{font-weight:bold;font-size:17px;letter-spacing:.5px;display:flex;align-items:center;gap:10px}
+  header .brand .mark{width:26px;height:26px;border-radius:6px;background:linear-gradient(135deg,var(--blue),var(--gold));
+       display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;font-weight:bold}
+  header .tabs{display:flex;gap:4px;margin-left:8px}
+  header .tabs button{background:transparent;border:0;color:#cdd8ec;padding:7px 14px;border-radius:7px 7px 0 0;
+       font-family:inherit;font-size:13px;cursor:pointer}
+  header .tabs button.active{background:var(--bg);color:var(--navy);font-weight:bold}
+  header .spacer{flex:1}
+  header .stat{font-size:12px;color:#aebbd4}
+  header .stat b{color:#fff}
+
+  /* Toolbar */
+  .toolbar{background:#fff;border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:10px;
+       align-items:center;flex-wrap:wrap;flex:none;box-shadow:var(--shadow);z-index:5}
+  .search{position:relative;flex:1;min-width:240px;max-width:460px}
+  .search input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--line);border-radius:8px;
+       font-family:inherit;font-size:14px;background:#fff}
+  .search input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(31,95,173,.12)}
+  .search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:16px;height:16px;fill:var(--muted)}
+  .filterbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .fsel{display:flex;flex-direction:column;gap:2px}
+  .fsel label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:bold;padding-left:2px}
+  .fsel select{padding:6px 8px;border:1px solid var(--line);border-radius:7px;font-family:inherit;font-size:13px;
+       background:#fff;min-width:120px;max-width:180px}
+  .fsel select:focus{outline:none;border-color:var(--blue)}
+  .btn{padding:8px 13px;border:1px solid var(--line);background:#fff;border-radius:8px;font-family:inherit;
+       font-size:13px;cursor:pointer;color:var(--ink);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+  .btn:hover{background:var(--hover);border-color:var(--blue)}
+  .btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .btn.primary:hover{background:#184d8e}
+  .btn.ghost{border-color:transparent;color:var(--blue)}
+
+  /* Active filter chips */
+  .chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 16px 8px;background:#fff;border-bottom:1px solid var(--line);flex:none}
+  .chips:empty{display:none}
+  .chip{background:var(--chip);color:var(--navy);border:1px solid #d3e0f5;border-radius:20px;padding:3px 9px 3px 11px;
+       font-size:12px;display:inline-flex;align-items:center;gap:6px}
+  .chip b{font-weight:bold}
+  .chip span{cursor:pointer;font-weight:bold;color:var(--blue);font-size:14px;line-height:1}
+  .chip span:hover{color:#b3261e}
+
+  /* Grid */
+  .gridwrap{flex:1;overflow:auto;position:relative;background:#fff}
+  table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
+  thead th{position:sticky;top:0;background:var(--navy);color:#fff;text-align:left;padding:9px 12px;
+       white-space:nowrap;font-size:11px;text-transform:uppercase;letter-spacing:.4px;cursor:pointer;z-index:2;
+       border-bottom:2px solid var(--gold)}
+  thead th:hover{background:#22335a}
+  thead th .arr{color:var(--gold);font-size:10px;margin-left:4px}
+  tbody td{padding:7px 12px;border-bottom:1px solid var(--line);white-space:nowrap;max-width:340px;
+       overflow:hidden;text-overflow:ellipsis}
+  tbody tr:nth-child(even){background:var(--row-alt)}
+  tbody tr:hover{background:var(--hover)}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  td.id{font-family:"Courier New",monospace;font-size:12px;color:var(--navy)}
+  td.price{font-weight:bold;color:var(--navy)}
+  mark{background:#fde9a8;padding:0 1px;border-radius:2px}
+
+  .empty{padding:60px 20px;text-align:center;color:var(--muted)}
+  .empty h3{color:var(--navy);margin:0 0 6px}
+  .loading{position:absolute;inset:0;background:rgba(255,255,255,.85);display:flex;align-items:center;
+       justify-content:center;flex-direction:column;gap:14px;z-index:20}
+  .spinner{width:38px;height:38px;border:4px solid var(--chip);border-top-color:var(--blue);border-radius:50%;
+       animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .loading p{color:var(--muted);font-size:14px;margin:0}
+
+  /* footer */
+  footer{flex:none;background:#fff;border-top:1px solid var(--line);padding:6px 16px;font-size:12px;
+       color:var(--muted);display:flex;gap:18px;align-items:center}
+  footer b{color:var(--navy)}
+  .err{background:#fdecea;color:#b3261e;border:1px solid #f5c6c2;padding:10px 14px;border-radius:8px;margin:14px 16px;font-size:13px}
+
+  /* Detail drawer */
+  .drawer{position:fixed;top:0;right:0;height:100%;width:420px;max-width:92vw;background:#fff;
+       box-shadow:-8px 0 30px rgba(16,31,54,.18);transform:translateX(100%);transition:transform .22s ease;
+       z-index:40;display:flex;flex-direction:column}
+  .drawer.open{transform:translateX(0)}
+  .drawer .dhead{background:var(--navy);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:flex-start}
+  .drawer .dhead h3{margin:0;font-size:15px}
+  .drawer .dhead small{color:#aebbd4;font-size:11px}
+  .drawer .dhead button{background:transparent;border:0;color:#fff;font-size:22px;cursor:pointer;line-height:1}
+  .drawer .dbody{overflow:auto;padding:6px 0}
+  .drawer .drow{display:flex;padding:8px 18px;border-bottom:1px solid var(--line);gap:12px}
+  .drawer .drow .k{flex:0 0 130px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:bold}
+  .drawer .drow .v{flex:1;font-size:13px;word-break:break-word}
+  .backdrop{position:fixed;inset:0;background:rgba(16,31,54,.35);z-index:39;opacity:0;pointer-events:none;transition:opacity .22s}
+  .backdrop.show{opacity:1;pointer-events:auto}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="mark">EP</span> Elite Pricing Viewer</div>
+  <div class="tabs">
+    <button id="tabRaw" class="active" onclick="switchTab('raw')">Pricing Data</button>
+    <button id="tabFilters" onclick="switchTab('filters')">Search Filters</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="stat" id="headStat"></div>
+</header>
+
+<div class="toolbar">
+  <div class="search">
+    <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 5L20.5 19l-5-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
+    <input id="searchBox" type="text" placeholder="Search all columns…" autocomplete="off">
+  </div>
+  <div class="filterbar" id="filterBar"></div>
+  <div class="spacer"></div>
+  <button class="btn ghost" onclick="clearAll()">Clear</button>
+  <button class="btn" onclick="exportCsv()">⤓ CSV</button>
+  <button class="btn primary" onclick="reload()">↻ Refresh</button>
+</div>
+
+<div class="chips" id="chipBar"></div>
+
+<div class="gridwrap" id="gridWrap">
+  <table id="grid">
+    <thead><tr id="headRow"></tr></thead>
+    <tbody id="bodyRows"></tbody>
+  </table>
+  <div class="loading" id="loading"><div class="spinner"></div><p id="loadMsg">Loading pricing data…</p></div>
+</div>
+
+<footer>
+  <span>Showing <b id="shownCount">0</b> of <b id="totalCount">0</b> rows</span>
+  <span id="updatedAt"></span>
+  <span class="spacer" style="flex:1"></span>
+  <span>Read-only • Elite Standard</span>
+</footer>
+
+<div class="backdrop" id="backdrop" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="dhead"><div><h3 id="drawTitle"></h3><small id="drawSub"></small></div><button onclick="closeDrawer()">×</button></div>
+  <div class="dbody" id="drawBody"></div>
+</div>
+
+<script>
+/* ============ CONFIG ============ */
+/* Paste your Apps Script Web App /exec URL here after deploying Code.gs */
+var API_URL = "PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE";
+
+/* Which columns get dropdown filters (must match Raw Data headers) */
+var FILTER_COLS = ["ST","State Id","SUPPLIER","Type","Brand","Type Code","Trade Type","Price Sheet"];
+/* Friendlier labels for the dropdowns */
+var FILTER_LABELS = {"ST":"State","State Id":"Region","SUPPLIER":"Supplier","Type Code":"Type Code"};
+/* Columns rendered right-aligned / styled */
+var NUM_COLS = ["Current Price"];
+var ID_COLS = ["Parent Id","Child Id","Product Id","Unique ID","Supplier Id","State Id"];
+var PRICE_COLS = ["Current Price"];
+
+/* ============ STATE ============ */
+var DATA = { raw:{headers:[],rows:[]}, filters:{headers:[],rows:[]} };
+var view = "raw";
+var sortCol = -1, sortDir = 1;
+var filterState = {};          // colName -> selected value
+var searchTerm = "";
+var filtered = [];             // current filtered+sorted rows (array of arrays)
+var RENDER_CHUNK = 200, rendered = 0;
+
+/* ============ LOAD ============ */
+function jsonp(action, cb){
+  // Apps Script supports ?callback= for JSONP, avoiding CORS from GitHub Pages.
+  var fn = "__cb_" + Math.random().toString(36).slice(2);
+  window[fn] = function(data){ cb(data); delete window[fn]; s.remove(); };
+  var s = document.createElement("script");
+  var sep = API_URL.indexOf("?")>-1 ? "&" : "?";
+  s.src = API_URL + sep + "action=" + action + "&callback=" + fn + "&t=" + Date.now();
+  s.onerror = function(){ showError("Network error contacting the data source."); s.remove(); };
+  document.body.appendChild(s);
+}
+
+function load(){
+  if(API_URL.indexOf("PASTE_")===0){
+    hideLoading();
+    showError("Set API_URL in index.html to your Apps Script /exec URL, then redeploy.");
+    return;
+  }
+  showLoading("Loading pricing data…");
+  jsonp("bootstrap", function(res){
+    if(!res || !res.ok){ showError((res&&res.error)||"Failed to load data."); hideLoading(); return; }
+    DATA.raw = res.raw; DATA.filters = res.filters;
+    var u = res.meta && res.meta.lastUpdated ? new Date(res.meta.lastUpdated) : null;
+    document.getElementById("updatedAt").textContent = u ? "Updated "+u.toLocaleString() : "";
+    buildFilterBar();
+    render();
+    hideLoading();
+  });
+}
+function reload(){ // bust cache server-side will refresh within TTL; just re-fetch
+  load();
+}
+
+/* ============ TABS ============ */
+function switchTab(t){
+  view = t;
+  document.getElementById("tabRaw").classList.toggle("active", t==="raw");
+  document.getElementById("tabFilters").classList.toggle("active", t==="filters");
+  // Filters tab has no column filters; hide them
+  document.getElementById("filterBar").style.display = (t==="raw") ? "flex" : "none";
+  searchTerm=""; document.getElementById("searchBox").value="";
+  sortCol=-1;
+  render();
+}
+
+/* ============ FILTER BAR ============ */
+function colIndex(headers,name){ return headers.indexOf(name); }
+function buildFilterBar(){
+  var bar = document.getElementById("filterBar");
+  bar.innerHTML="";
+  var h = DATA.raw.headers;
+  FILTER_COLS.forEach(function(col){
+    var idx = colIndex(h,col); if(idx<0) return;
+    var vals = {};
+    DATA.raw.rows.forEach(function(r){ var v=(r[idx]||"").trim(); if(v) vals[v]=1; });
+    var options = Object.keys(vals).sort(function(a,b){return a.localeCompare(b,undefined,{numeric:true});});
+    var wrap=document.createElement("div"); wrap.className="fsel";
+    var lab=document.createElement("label"); lab.textContent=FILTER_LABELS[col]||col;
+    var sel=document.createElement("select");
+    sel.innerHTML='<option value="">All</option>'+options.map(function(o){
+        return '<option value="'+escAttr(o)+'">'+escHtml(o)+'</option>';}).join("");
+    sel.onchange=function(){ if(sel.value) filterState[col]=sel.value; else delete filterState[col]; render(); };
+    wrap.appendChild(lab); wrap.appendChild(sel); bar.appendChild(wrap);
+  });
+}
+
+/* ============ RENDER ============ */
+function currentSet(){ return view==="raw"?DATA.raw:DATA.filters; }
+
+function applyFilters(){
+  var set=currentSet(), h=set.headers, rows=set.rows;
+  var term=searchTerm.toLowerCase().trim();
+  var activeFilters = (view==="raw") ? Object.keys(filterState) : [];
+  var fIdx = activeFilters.map(function(c){return {i:colIndex(h,c),v:filterState[c]};});
+
+  filtered = rows.filter(function(r){
+    for(var k=0;k<fIdx.length;k++){ if((r[fIdx[k].i]||"").trim()!==fIdx[k].v) return false; }
+    if(term){
+      var hit=false;
+      for(var j=0;j<r.length;j++){ if((r[j]||"").toLowerCase().indexOf(term)>-1){hit=true;break;} }
+      if(!hit) return false;
+    }
+    return true;
+  });
+
+  if(sortCol>-1){
+    var dir=sortDir;
+    filtered.sort(function(a,b){
+      var x=a[sortCol]||"", y=b[sortCol]||"";
+      var nx=parseFloat(String(x).replace(/[$,]/g,"")), ny=parseFloat(String(y).replace(/[$,]/g,""));
+      if(!isNaN(nx)&&!isNaN(ny)) return (nx-ny)*dir;
+      return x.localeCompare(y,undefined,{numeric:true})*dir;
+    });
+  }
+}
+
+function render(){
+  var set=currentSet(), h=set.headers;
+  applyFilters();
+
+  // header
+  var hr=document.getElementById("headRow"); hr.innerHTML="";
+  h.forEach(function(name,i){
+    var th=document.createElement("th");
+    var arr = sortCol===i ? '<span class="arr">'+(sortDir>0?"▲":"▼")+'</span>' : '';
+    th.innerHTML=escHtml(name)+arr;
+    th.onclick=function(){ if(sortCol===i) sortDir=-sortDir; else {sortCol=i;sortDir=1;} render(); };
+    hr.appendChild(th);
+  });
+
+  // body (chunked for performance)
+  var tb=document.getElementById("bodyRows"); tb.innerHTML="";
+  rendered=0;
+  renderChunk();
+
+  // counts + chips
+  document.getElementById("shownCount").textContent=filtered.length.toLocaleString();
+  document.getElementById("totalCount").textContent=set.rows.length.toLocaleString();
+  document.getElementById("headStat").innerHTML=
+     "<b>"+set.rows.length.toLocaleString()+"</b> "+(view==="raw"?"pricing rows":"filter rows");
+  buildChips();
+
+  if(filtered.length===0){
+    tb.innerHTML='<tr><td colspan="'+h.length+'"><div class="empty"><h3>No matches</h3>'+
+      'Try clearing filters or adjusting your search.</div></td></tr>';
+  }
+}
+
+function renderChunk(){
+  var set=currentSet(), h=set.headers, tb=document.getElementById("bodyRows");
+  var term=searchTerm.toLowerCase().trim();
+  var end=Math.min(rendered+RENDER_CHUNK, filtered.length);
+  var html="";
+  for(var ri=rendered; ri<end; ri++){
+    var r=filtered[ri];
+    html+='<tr onclick="openDrawer('+ri+')">';
+    for(var ci=0;ci<h.length;ci++){
+      var name=h[ci], val=r[ci]||"";
+      var cls="";
+      if(NUM_COLS.indexOf(name)>-1) cls="num";
+      if(PRICE_COLS.indexOf(name)>-1) cls="num price";
+      if(ID_COLS.indexOf(name)>-1) cls="id";
+      html+='<td class="'+cls+'">'+highlight(val,term)+'</td>';
+    }
+    html+='</tr>';
+  }
+  tb.insertAdjacentHTML("beforeend",html);
+  rendered=end;
+}
+
+/* infinite scroll within the grid */
+document.getElementById("gridWrap").addEventListener("scroll",function(e){
+  var el=e.target;
+  if(rendered<filtered.length && el.scrollTop+el.clientHeight>=el.scrollHeight-300) renderChunk();
+});
+
+/* ============ CHIPS ============ */
+function buildChips(){
+  var bar=document.getElementById("chipBar"); bar.innerHTML="";
+  if(view!=="raw") return;
+  Object.keys(filterState).forEach(function(col){
+    var c=document.createElement("div"); c.className="chip";
+    c.innerHTML='<b>'+escHtml(FILTER_LABELS[col]||col)+':</b> '+escHtml(filterState[col])+' <span>×</span>';
+    c.querySelector("span").onclick=function(){ delete filterState[col]; syncSelects(); render(); };
+    bar.appendChild(c);
+  });
+  if(searchTerm){
+    var c=document.createElement("div"); c.className="chip";
+    c.innerHTML='<b>Search:</b> '+escHtml(searchTerm)+' <span>×</span>';
+    c.querySelector("span").onclick=function(){ searchTerm=""; document.getElementById("searchBox").value=""; render(); };
+    bar.appendChild(c);
+  }
+}
+function syncSelects(){
+  document.querySelectorAll("#filterBar select").forEach(function(sel,i){
+    var col=FILTER_COLS.filter(function(c){return colIndex(DATA.raw.headers,c)>-1;})[i];
+    if(col) sel.value=filterState[col]||"";
+  });
+}
+
+/* ============ DRAWER ============ */
+function openDrawer(ri){
+  var set=currentSet(), h=set.headers, r=filtered[ri]; if(!r) return;
+  var title = view==="raw" ? (r[colIndex(h,"Elite Product Name")]||"Record") : (r[0]||"Record");
+  var sub = view==="raw" ? [(r[colIndex(h,"Brand")]||""),(r[colIndex(h,"Color")]||""),(r[colIndex(h,"ST")]||"")].filter(Boolean).join(" • ") : "";
+  document.getElementById("drawTitle").textContent=title;
+  document.getElementById("drawSub").textContent=sub;
+  var body=document.getElementById("drawBody"); body.innerHTML="";
+  h.forEach(function(name,i){
+    var v=r[i]||""; if(v==="") return;
+    var row=document.createElement("div"); row.className="drow";
+    row.innerHTML='<div class="k">'+escHtml(name)+'</div><div class="v">'+escHtml(v)+'</div>';
+    body.appendChild(row);
+  });
+  document.getElementById("drawer").classList.add("open");
+  document.getElementById("backdrop").classList.add("show");
+}
+function closeDrawer(){
+  document.getElementById("drawer").classList.remove("open");
+  document.getElementById("backdrop").classList.remove("show");
+}
+
+/* ============ ACTIONS ============ */
+function clearAll(){
+  filterState={}; searchTerm=""; document.getElementById("searchBox").value="";
+  document.querySelectorAll("#filterBar select").forEach(function(s){s.value="";});
+  sortCol=-1; render();
+}
+function exportCsv(){
+  var set=currentSet(), h=set.headers;
+  var lines=[h.map(csvCell).join(",")];
+  filtered.forEach(function(r){ lines.push(r.map(csvCell).join(",")); });
+  var blob=new Blob([lines.join("\n")],{type:"text/csv"});
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=(view==="raw"?"pricing_data":"search_filters")+"_"+new Date().toISOString().slice(0,10)+".csv";
+  a.click();
+}
+function csvCell(v){ v=(v==null?"":String(v)); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+
+/* search debounce */
+var searchTimer;
+document.getElementById("searchBox").addEventListener("input",function(e){
+  clearTimeout(searchTimer);
+  var val=e.target.value;
+  searchTimer=setTimeout(function(){ searchTerm=val; render(); },180);
+});
+
+/* ============ HELPERS ============ */
+function escHtml(s){return String(s).replace(/[&<>]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;"}[c];});}
+function escAttr(s){return String(s).replace(/"/g,"&quot;");}
+function highlight(val,term){
+  val=escHtml(val);
+  if(!term) return val;
+  try{
+    var re=new RegExp("("+term.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","ig");
+    return val.replace(re,"<mark>$1</mark>");
+  }catch(e){ return val; }
+}
+function showLoading(msg){ document.getElementById("loadMsg").textContent=msg||"Loading…"; document.getElementById("loading").style.display="flex"; }
+function hideLoading(){ document.getElementById("loading").style.display="none"; }
+function showError(msg){
+  var w=document.getElementById("gridWrap");
+  var e=document.createElement("div"); e.className="err"; e.textContent=msg;
+  w.querySelector(".err") && w.querySelector(".err").remove();
+  w.prepend(e);
+}
+
+load();
+</script>
+</body>
+</html>
